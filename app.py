@@ -471,3 +471,21 @@ with tab2:
             paid_gate()
 
 with tab3:
+
+    st.subheader("AI秒算遺產稅（原生頁面整合）")
+    # 直接呼叫你提供的 UI 類別
+    calc = estate_mod.EstateTaxCalculator(estate_mod.TaxConstants())
+    sim = estate_mod.EstateTaxSimulator(calc)
+    ui = estate_mod.EstateTaxUI(calc, sim)
+    paid3 = st.session_state.get('paid_unlocked', False)
+    try:
+        estate_mod.PAID_UNLOCKED = paid3
+    except Exception:
+        pass
+    if not paid3:
+        st.info('🔒 進階功能（保險／贈與模擬）需付費解鎖。您仍可使用基本遺產稅估算。')
+        ui.render_ui()
+        with st.expander('輸入付費啟用碼以解鎖'):
+            paid_gate()
+    else:
+        ui.render_ui()
