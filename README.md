@@ -23,3 +23,16 @@ streamlit run app.py
 解鎖後，將開啟：
 - 模組二的 **壽險模擬** 與 **分年贈與** 控制
 - 模組三（AI秒算遺產稅）的 **保險／贈與模擬** 區塊
+
+
+## 登入機制（純帳號登入）
+- 只保留 `authorized_users.*` 帳號登入（不再支援啟用碼）
+- 於 Streamlit Secrets 設定：
+```toml
+[authorized_users.admin]
+name = "管理者"
+username = "admin"
+password = "xxx"
+start_date = "2025-01-01"
+end_date = "2026-12-31"
+```

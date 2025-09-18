@@ -63,62 +63,8 @@ else:
 
 # ---- Paywall helper ----
 
-# ---- Enhanced Paywall: also accept secrets-based user login ----
 
-# ---- Session helpers (TTL + user info bar) ----
-from datetime import datetime, timedelta
-
-SESSION_TTL_SECS = 3600  # 1 hour
-
-def _session_now():
-    try:
-        # use UTC for consistency
-        return datetime.utcnow()
-    except Exception:
-        return datetime.now()
-
-def session_is_expired():
-    ts = st.session_state.get("paid_unlocked_at")
-    ttl = st.session_state.get("session_ttl_secs", SESSION_TTL_SECS)
-    if not ts:
-        return False
-    try:
-        started = datetime.fromisoformat(ts)
-        return _session_now() > started + timedelta(seconds=int(ttl))
-    except Exception:
-        return False
-
-def render_user_info_bar():
-    if st.session_state.get("paid_unlocked") and not session_is_expired():
-        meta = st.session_state.get("paid_user_meta", {})
-        name = meta.get("name") or meta.get("role") or "已登入使用者"
-        start = meta.get("start_date", "-")
-        end = meta.get("end_date", "-")
-        via = meta.get("via", "user")
-        # Remaining time
-        try:
-            started = datetime.fromisoformat(st.session_state.get("paid_unlocked_at"))
-            ttl = int(st.session_state.get("session_ttl_secs", SESSION_TTL_SECS))
-            remain = (started + timedelta(seconds=ttl) - _session_now()).total_seconds()
-            mins = max(0, int(remain // 60))
-        except Exception:
-            mins = "-"
-        cols = st.columns([0.85, 0.15])
-        with cols[0]:
-            st.info(f"👤 {name}｜有效期：{start} ➜ {end}｜登入方式：{via}｜Session 剩餘：約 {mins} 分鐘")
-        with cols[1]:
-            if st.button("登出", use_container_width=True):
-                for k in ["paid_unlocked","paid_user_meta","paid_unlocked_at","session_ttl_secs"]:
-                    st.session_state.pop(k, None)
-                st.success("已登出。")
-                st.experimental_rerun()
-    else:
-        # If expired, auto lock and prompt
-        if st.session_state.get("paid_unlocked") and session_is_expired():
-            for k in ["paid_unlocked","paid_user_meta","paid_unlocked_at","session_ttl_secs"]:
-                st.session_state.pop(k, None)
-            st.warning("您的進階權限 Session 已逾期（1 小時）。請重新解鎖或登入。")
-
+# ---- Login-only Gate (authorized_users.*) ----
 from datetime import datetime
 
 def _check_user_login(u, p):
@@ -126,85 +72,54 @@ def _check_user_login(u, p):
         auth = st.secrets.get("authorized_users", {})
     except Exception:
         auth = {}
-    # auth is expected to be a dict of sections: { "admin": {...}, "user1": {...} }
     for key, rec in (auth.items() if isinstance(auth, dict) else []):
         try:
             username = str(rec.get("username","")).strip()
             password = str(rec.get("password","")).strip()
             if u.strip() == username and p.strip() == password:
                 # Date window check (YYYY-MM-DD)
-                start = rec.get("start_date")
-                end = rec.get("end_date")
-                today = datetime.utcnow().date()
-                ok_date = True
                 def _parse(d):
                     try:
-                        return datetime.strptime(d, "%Y-%m-%d").date()
+                        return datetime.strptime(str(d), "%Y-%m-%d").date()
                     except Exception:
                         return None
-                if start:
-                    s = _parse(str(start))
-                    if s and today < s: ok_date = False
-                if end:
-                    e = _parse(str(end))
-                    if e and today > e: ok_date = False
-                meta = {"role": key, "name": rec.get("name", key), "valid": ok_date}
+                today = datetime.utcnow().date()
+                start = _parse(rec.get("start_date"))
+                end = _parse(rec.get("end_date"))
+                ok_date = True
+                if start and today < start: ok_date = False
+                if end and today > end: ok_date = False
+                meta = {"role": key, "name": rec.get("name", key), "start_date": rec.get("start_date","-"), "end_date": rec.get("end_date","-"), "via":"user"}
                 return ok_date, meta
         except Exception:
             continue
     return False, {}
 
-def paid_gate():
-    st.subheader("專業版解鎖")
-    tabs = st.tabs(["輸入啟用碼", "帳號登入"])
+def login_gate(prefix: str = "gate"):
     unlocked = st.session_state.get("paid_unlocked", False)
-    meta_info = st.session_state.get("paid_user_meta")
-
-    with tabs[0]:
-        st.caption("方式一：輸入付費啟用碼以解鎖（支援多組碼）")
-        code = st.text_input("啟用碼（不分大小寫）", type="password", key="code_unlock")
-        # Read from secrets
-        paid_codes = []
-        try:
-            sc = st.secrets.get("PAID_CODES")
-            if isinstance(sc, list):
-                paid_codes = [str(x).strip().lower() for x in sc]
-            elif isinstance(sc, str):
-                paid_codes = [sc.strip().lower()]
-        except Exception:
-            pass
-        if not paid_codes:
-            paid_codes = ["demo-1234"]  # fallback demo
-        if code:
-            if code.strip().lower() in paid_codes:
-                st.success("已用啟用碼解鎖進階功能。")
-                st.session_state["paid_unlocked"] = True
-                st.session_state["paid_user_meta"] = {"via": "code"}
-                st.session_state["paid_unlocked_at"] = _session_now().isoformat()
-                st.session_state["session_ttl_secs"] = SESSION_TTL_SECS
-                unlocked = True
-
-    with tabs[1]:
-        st.caption("方式二：使用管理者提供的帳號密碼登入（依有效期限啟用）。")
-        u = st.text_input("帳號", key="login_user")
-        p = st.text_input("密碼", type="password", key="login_pass")
-        if st.button("登入", use_container_width=True):
-            ok, meta = _check_user_login(u, p)
-            if ok:
-                st.success(f"歡迎 {meta.get('name','')}！進階功能已解鎖。")
-                st.session_state["paid_unlocked"] = True
-                st.session_state["paid_user_meta"] = meta
-                st.session_state["paid_unlocked_at"] = _session_now().isoformat()
-                st.session_state["session_ttl_secs"] = SESSION_TTL_SECS
-                unlocked = True
-            else:
-                st.error("帳號或密碼錯誤，或不在有效期間內。")
-
     if unlocked:
-        mi = st.session_state.get("paid_user_meta", {})
-        note = f"（解鎖來源：{mi.get('via','user')}）" if mi else ""
-        st.caption("目前狀態：✅ 已解鎖進階功能 " + note)
-    return unlocked
+        return True
+    st.warning("進階功能需登入使用者帳號")
+    with st.form(key=f"login_form_{prefix}", clear_on_submit=False):
+        u = st.text_input("帳號", key=f"login_user_{prefix}")
+        p = st.text_input("密碼", type="password", key=f"login_pass_{prefix}")
+        colA, colB = st.columns([0.4,0.6])
+        with colA:
+            submit = st.form_submit_button("登入")
+        with colB:
+            st.caption("＊帳號由管理者提供，具有效期控管")
+    if 'submit' in locals() and submit:
+        ok, meta = _check_user_login(u, p)
+        if ok:
+            st.success(f"歡迎 {meta.get('name','')}！進階功能已解鎖。")
+            st.session_state["paid_unlocked"] = True
+            st.session_state["paid_user_meta"] = meta
+            st.session_state["paid_unlocked_at"] = _session_now().isoformat()
+            st.session_state["session_ttl_secs"] = SESSION_TTL_SECS
+            st.experimental_rerun()
+        else:
+            st.error("帳號或密碼錯誤，或不在有效期間內。")
+    return st.session_state.get("paid_unlocked", False)
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -379,6 +294,7 @@ tab1, tab2, tab3 = st.tabs(["模組一｜股利決策與稅負", "模組二｜�
 
 with tab1:
     st.subheader("兩階段分配＋AMT＋未分配盈餘稅＋個人二擇一")
+    st.caption("提示：先在左側設定參數，再查看下方的總結、明細與圖表。")
     col = st.columns(3)
     with st.sidebar:
         st.header("模組一：參數")
@@ -425,6 +341,8 @@ with tab1:
 
 with tab2:
     paid = st.session_state.get('paid_unlocked', False)
+    st.markdown("### 傳承與移轉：操作說明")
+    st.caption("左側輸入參數，右側即時顯示結果。帶 🔒 的欄位需登入後解鎖。")
     paid = st.session_state.get('paid_unlocked', False)
     st.subheader("遺產／贈與／保險／信託示意（簡化）")
     c1, c2 = st.columns(2)
@@ -468,7 +386,7 @@ with tab2:
     st.write("**各繼承人分配（概算）**"); st.dataframe(alloc)
     if not paid:
         with st.expander('解鎖進階功能（保險／贈與模擬）'):
-            paid_gate()
+            login_gate("m2")
 
 with tab3:
 
@@ -483,9 +401,8 @@ with tab3:
     except Exception:
         pass
     if not paid3:
-        st.info('🔒 進階功能（保險／贈與模擬）需付費解鎖。您仍可使用基本遺產稅估算。')
+        st.info('🔒 進階功能（保險／贈與模擬）需登入解鎖。您仍可使用基本遺產稅估算。')
         ui.render_ui()
-        with st.expander('輸入付費啟用碼以解鎖'):
-            paid_gate()
+        login_gate("m3")
     else:
         ui.render_ui()
