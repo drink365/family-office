@@ -45,3 +45,8 @@ end_date = "2026-12-31"
 - reportlab：註冊字型並提供 `DEFAULT_PDF_FONT='NotoSansTC'`
 
 請確認 `NotoSansTC-Regular.ttf` 與 `app.py` 同目錄一併部署。
+
+
+## v7.3 變更
+- 模組一改為「單年度稅負試算」：不再做多年累積線性圖，避免誤導；以當年度盈餘與分配行為為計算基礎。
+- 移除側邊欄，所有輸入改為頁面內三欄配置。

@@ -292,29 +292,33 @@ st.title("家族辦公室評估平台 v5（股利 × 傳承 × AI秒算遺產稅
 
 tab1, tab2, tab3 = st.tabs(["模組一｜股利決策與稅負", "模組二｜傳承與移轉規劃", "模組三｜AI秒算遺產稅"])
 
+
 with tab1:
-    st.subheader("兩階段分配＋AMT＋未分配盈餘稅＋個人二擇一")
-    st.caption("提示：先在左側設定參數，再查看下方的總結、明細與圖表。")
-    col = st.columns(3)
-    with st.sidebar:
-        st.header("模組一：參數")
-        years = st.number_input("年度數", 1, 60, 30, 1)
-        pretax = st.number_input("每年稅前盈餘", 0, 2_000_000_000, 20_000_000, 1_000_000)
+    st.subheader("單年度稅負試算（公司＋股東）")
+    st.caption("說明：以**單一年度**的盈餘與分配行為為基礎，計算公司層稅負、未分配盈餘稅與股東層稅，避免以長期假設誤導判斷。")
+
+    colA, colB, colC = st.columns([1.1, 1.1, 1.2])
+
+    with colA:
+        pretax = st.number_input("當年度稅前盈餘", 0, 2_000_000_000, 20_000_000, 1_000_000)
+        init_capital = st.number_input("期初資本額（用於法定盈餘公積上限）", 0, 2_000_000_000, 1_000_000, 100_000)
         corp_tax_rate = st.number_input("公司稅率", 0.0, 0.5, 0.20, 0.01)
-        corp_amt_min = st.number_input("公司最低稅負（AMT）", 0.0, 0.5, 0.12, 0.01)
+        corp_amt_min = st.number_input("最低稅負（AMT）", 0.0, 0.5, 0.12, 0.01)
+
+    with colB:
+        legal_on = st.checkbox("提列法定盈餘公積", True)
+        lr_rate = st.slider("法定盈餘公積提列率", 0.0, 0.2, 0.10, 0.01)
+        lr_cap = st.slider("法定盈餘公積上限（資本×）", 0.0, 1.0, 0.25, 0.05)
         undist_rate = st.number_input("未分配盈餘稅率", 0.0, 0.2, 0.05, 0.01)
-        init_capital = st.number_input("初始資本額", 0, 2_000_000_000, 1_000_000, 100_000)
-        lr_on = st.checkbox("啟用法定盈餘公積", True)
-        lr_rate = st.slider("提列比例", 0.0, 0.2, 0.10, 0.01)
-        lr_cap = st.slider("上限（資本×）", 0.0, 1.0, 0.25, 0.05)
-        phase1_years = st.number_input("階段一年數", 0, 60, 10, 1)
-        p1_cash = st.slider("階段一：現金股利 %", 0.0, 1.0, 0.0, 0.05)
-        p1_stock= st.slider("階段一：股票股利 %", 0.0, 1.0, 0.0, 0.05)
-        p2_cash = st.slider("階段二：現金股利 %", 0.0, 1.0, 0.0, 0.05)
-        p2_stock= st.slider("階段二：股票股利 %", 0.0, 1.0, 0.0, 0.05)
-        kind = st.selectbox("最終股東型別", ["本國個人","本國法人","非居民（外資）"])
+
+    with colC:
+        st.markdown("**分配政策（% 以稅後盈餘扣除法定公積後為基礎）**")
+        cash_pct = st.slider("現金股利 %", 0.0, 1.0, 0.0, 0.05)
+        stock_pct = st.slider("股票股利 %", 0.0, 1.0, 0.0, 0.05)
+
+        kind = st.selectbox("股東型別", ["本國個人","本國法人","非居民（外資）"])
         if kind=="本國個人":
-            indiv_mode_ch = st.radio("個人課稅模式", ["28% 分開課稅","併入綜所稅（含8.5%抵減）"])
+            indiv_mode_ch = st.radio("個人課稅模式", ["28% 分開課稅","併入綜所稅（含8.5%抵減）"], horizontal=True)
             indiv_mode = "split28" if indiv_mode_ch.startswith("28%") else "integrate"
             other_income = st.number_input("其他綜所稅所得額", 0, 2_000_000_000, 0, 10_000)
             shareholder_kind="individual_resident"; withhold=0.0
@@ -323,21 +327,67 @@ with tab1:
         else:
             shareholder_kind="nonresident"; indiv_mode="split28"; other_income=0.0
             withhold = st.number_input("非居民股利扣繳率（條約）", 0.0, 0.30, 0.21, 0.01)
-        cap_surplus_to_cap = st.number_input("資本公積轉增資（每年）", 0, 100_000_000, 0, 100_000)
-    res = simulate_dividend_policy(
-        years=int(years), pretax_profit=float(pretax), corp_tax_rate=float(corp_tax_rate),
-        corp_amt_min_rate=float(corp_amt_min), undistributed_tax_rate=float(undist_rate),
-        init_capital=float(init_capital), legal_reserve_on=bool(lr_on),
-        legal_reserve_rate=float(lr_rate), legal_reserve_cap=float(lr_cap),
-        phase1_years=int(phase1_years), phase1_cash_pct=float(p1_cash), phase1_stock_pct=float(p1_stock),
-        phase2_cash_pct=float(p2_cash), phase2_stock_pct=float(p2_stock),
-        shareholder_kind=shareholder_kind, indiv_tax_mode=indiv_mode,
-        indiv_other_income=float(other_income), nonresident_withholding=float(withhold),
-        capital_surplus_to_capital=float(cap_surplus_to_cap),
-    )
-    st.write("**總結**"); st.write(pd.DataFrame([res["totals"]]))
-    st.write("**年度明細**"); st.dataframe(res["per_year"])
-    fig = plt.figure(); plt.plot(res["per_year"]["年度"], res["per_year"]["期末股東權益(概算)"]); plt.xlabel("年度"); plt.ylabel("期末股東權益(概算)"); st.pyplot(fig)
+
+    # ---- 單年度計算邏輯 ----
+    corp_tax = max(pretax*corp_tax_rate, pretax*corp_amt_min)
+    after_tax = max(0.0, pretax - corp_tax)
+    # 法定盈餘公積：以期初資本額的上限判斷（本年提列不使資本額變動）
+    to_legal = 0.0
+    legal_reserve = 0.0
+    if legal_on:
+        target = init_capital * lr_cap
+        room = max(0.0, target - legal_reserve)
+        to_legal = min(after_tax * lr_rate, room)
+
+    dist_base = max(0.0, after_tax - to_legal)
+    cash = dist_base * cash_pct
+    stock = dist_base * stock_pct
+    keep = max(0.0, dist_base - cash - stock)
+
+    # 未分配盈餘稅
+    undist_tax = keep * undist_rate
+
+    # 股東層稅
+    if shareholder_kind=="corporate_resident":
+        sh_tax = 0.0
+    elif shareholder_kind=="individual_resident":
+        sh_tax = indiv_div_tax(cash+stock, indiv_mode, other_income, DEFAULT_BRACKETS)
+    else:
+        sh_tax = (cash+stock) * withhold
+
+    total_co = corp_tax + undist_tax
+    total_all = total_co + sh_tax
+
+    st.markdown("### 結果總結")
+    res_df = pd.DataFrame([{
+        "稅前盈餘": pretax,
+        "公司稅(含AMT)": corp_tax,
+        "稅後盈餘": after_tax,
+        "提列法定公積": to_legal,
+        "現金股利": cash,
+        "股票股利": stock,
+        "保留盈餘": keep,
+        "未分配盈餘稅": undist_tax,
+        "股東層稅": sh_tax,
+        "公司本年合計稅": total_co,
+        "本年總稅負": total_all,
+        "有效稅率(總稅/稅前盈餘)": (total_all/pretax) if pretax else 0.0
+    }])
+    st.dataframe(res_df)
+
+    # 視覺化：稅負拆解
+    fig = plt.figure()
+    labels = ["公司稅", "未分配盈餘稅", "股東層稅"]
+    values = [corp_tax, undist_tax, sh_tax]
+    plt.bar(labels, values)
+    from matplotlib.font_manager import FontProperties as _FP
+    from pathlib import Path as _Path
+    _fp = _FP(fname=str(_Path(__file__).with_name("NotoSansTC-Regular.ttf"))) if _Path(__file__).with_name("NotoSansTC-Regular.ttf").exists() else None
+    if _fp:
+        plt.ylabel("金額（元）", fontproperties=_fp)
+    else:
+        plt.ylabel("金額（元）")
+    st.pyplot(fig)
 
 with tab2:
     paid = st.session_state.get('paid_unlocked', False)
