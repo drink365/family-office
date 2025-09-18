@@ -507,26 +507,3 @@ if __name__ == "__main__":
     simulator = EstateTaxSimulator(calculator)
     ui = EstateTaxUI(calculator, simulator)
     ui.render_ui()
-
-
-# --- Paywall Adapter ---
-try:
-    import streamlit as _st  # noqa
-except Exception:
-    pass
-# 如果主程式設置了 PAID_UNLOCKED=False，則在進階模擬區把保險與贈與控件disable或置零
-def _paywall_wrap_render_ui(_orig_render_ui):
-    def _wrapped(self, *args, **kwargs):
-        paid = globals().get("PAID_UNLOCKED", True)
-        if not paid:
-            # 嘗試設置全域旗標給 UI 使用（若你的UI支援可讀取此旗標）
-            try:
-                self._paid_locked = True
-            except Exception:
-                pass
-        return _orig_render_ui(self, *args, **kwargs)
-    return _wrapped
-
-# 若類別存在 render_ui，套上包裝（不破壞原行為）
-if hasattr(EstateTaxUI, "render_ui"):
-    EstateTaxUI.render_ui = _paywall_wrap_render_ui(EstateTaxUI.render_ui)
