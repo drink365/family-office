@@ -425,6 +425,7 @@ with tab1:
 
 with tab2:
     paid = st.session_state.get('paid_unlocked', False)
+    paid = st.session_state.get('paid_unlocked', False)
     st.subheader("遺產／贈與／保險／信託示意（簡化）")
     c1, c2 = st.columns(2)
     with c1:
@@ -439,6 +440,7 @@ with tab2:
     else:
         years_gift = st.number_input("分年贈與年數", 0, 60, 5, 1)
         if not paid:
+        st.info("🔒 進階功能（分年贈與模擬）需付費解鎖")
         annual_gift = 0
     else:
         annual_gift = st.number_input("每年贈與總額", 0, 2_000_000_000, 10_000_000, 1_000_000)
