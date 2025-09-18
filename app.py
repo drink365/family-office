@@ -434,14 +434,14 @@ with tab2:
         personal_liab = st.number_input("個人負債", 0, 2_000_000_000, 0, 1_000_000)
         estate_exempt = st.number_input("遺產稅免稅額", 0, 100_000_000, 13_330_000, 10_000)
         annual_excl = st.number_input("贈與年免稅額", 0, 10_000_000, 0, 10_000)
-if not paid:
-    st.info("🔒 進階功能（分年贈與模擬）需付費解鎖")
-    years_gift = 0
-    annual_gift = 0
-else:
-    years_gift = st.number_input("分年贈與年數", 0, 60, 5, 1)
-    annual_gift = st.number_input("每年贈與總額", 0, 2_000_000_000, 10_000_000, 1_000_000)
-with c2:
+        if not paid:
+            st.info("🔒 進階功能（分年贈與模擬）需付費解鎖")
+            years_gift = 0
+            annual_gift = 0
+        else:
+            years_gift = st.number_input("分年贈與年數", 0, 60, 5, 1)
+            annual_gift = st.number_input("每年贈與總額", 0, 2_000_000_000, 10_000_000, 1_000_000)
+    with c2:
         st.markdown("**稅率級距（可於程式內自訂）**")
         estate_brackets=[(50_000_000,0.10,0),(100_000_000,0.15,2_500_000),(float('inf'),0.20,7_500_000)]
         gift_brackets=[(25_000_000,0.10,0),(50_000_000,0.15,1_250_000),(float('inf'),0.20,3_750_000)]
@@ -471,24 +471,3 @@ with c2:
             paid_gate()
 
 with tab3:
-    st.subheader("AI秒算遺產稅（原生頁面整合）")
-    # 直接呼叫你提供的 UI 類別
-    calc = estate_mod.EstateTaxCalculator(estate_mod.TaxConstants())
-    sim = estate_mod.EstateTaxSimulator(calc)
-    ui = estate_mod.EstateTaxUI(calc, sim)
-    paid3 = st.session_state.get('paid_unlocked', False)
-    # 若未付費，覆寫 UI 的進階模擬區：讓保險/贈與欄位不可用
-    try:
-        estate_mod.PAID_UNLOCKED = paid3
-    except Exception:
-        pass
-    if not paid3:
-        st.info('🔒 進階功能（保險／贈與模擬）需付費解鎖。您仍可使用基本遺產稅估算。')
-        # 直接渲染，進階控件由 estate_tax_app 內部識別 PAID_UNLOCKED 控制
-        ui.render_ui()
-        with st.expander('輸入付費啟用碼以解鎖'):
-            paid_gate()
-    else:
-        ui.render_ui()
-
-st.caption("《影響力》傳承策略平台｜永傳家族辦公室")
