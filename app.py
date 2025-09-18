@@ -401,8 +401,7 @@ with tab3:
     except Exception:
         pass
     if not paid3:
-        st.info('🔒 進階功能（保險／贈與模擬）需登入解鎖。您仍可使用基本遺產稅估算。')
+        st.info('🔒 進階功能（保險／贈與模擬）需登入解鎖。以下為基本遺產稅估算功能；進階功能請使用本頁內置登入框登入。')
         ui.render_ui()
-        login_gate("m3")
     else:
         ui.render_ui()
