@@ -36,3 +36,12 @@ password = "xxx"
 start_date = "2025-01-01"
 end_date = "2026-12-31"
 ```
+
+
+## 字型與中文顯示
+本版已整合 NotoSansTC：
+- matplotlib：註冊字型並設為全域預設，`axes.unicode_minus=False`
+- plotly：覆蓋預設模板字型為 Noto Sans TC
+- reportlab：註冊字型並提供 `DEFAULT_PDF_FONT='NotoSansTC'`
+
+請確認 `NotoSansTC-Regular.ttf` 與 `app.py` 同目錄一併部署。
