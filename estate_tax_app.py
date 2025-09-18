@@ -511,7 +511,7 @@ if __name__ == "__main__":
 
 # --- Paywall Adapter ---
 try:
-    import streamlit as st as _st  # noqa
+    import streamlit as _st  # noqa
 except Exception:
     pass
 # 如果主程式設置了 PAID_UNLOCKED=False，則在進階模擬區把保險與贈與控件disable或置零

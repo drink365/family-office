@@ -62,31 +62,149 @@ else:
     st.title("《影響力》傳承策略平台｜永傳家族辦公室")
 
 # ---- Paywall helper ----
+
+# ---- Enhanced Paywall: also accept secrets-based user login ----
+
+# ---- Session helpers (TTL + user info bar) ----
+from datetime import datetime, timedelta
+
+SESSION_TTL_SECS = 3600  # 1 hour
+
+def _session_now():
+    try:
+        # use UTC for consistency
+        return datetime.utcnow()
+    except Exception:
+        return datetime.now()
+
+def session_is_expired():
+    ts = st.session_state.get("paid_unlocked_at")
+    ttl = st.session_state.get("session_ttl_secs", SESSION_TTL_SECS)
+    if not ts:
+        return False
+    try:
+        started = datetime.fromisoformat(ts)
+        return _session_now() > started + timedelta(seconds=int(ttl))
+    except Exception:
+        return False
+
+def render_user_info_bar():
+    if st.session_state.get("paid_unlocked") and not session_is_expired():
+        meta = st.session_state.get("paid_user_meta", {})
+        name = meta.get("name") or meta.get("role") or "已登入使用者"
+        start = meta.get("start_date", "-")
+        end = meta.get("end_date", "-")
+        via = meta.get("via", "user")
+        # Remaining time
+        try:
+            started = datetime.fromisoformat(st.session_state.get("paid_unlocked_at"))
+            ttl = int(st.session_state.get("session_ttl_secs", SESSION_TTL_SECS))
+            remain = (started + timedelta(seconds=ttl) - _session_now()).total_seconds()
+            mins = max(0, int(remain // 60))
+        except Exception:
+            mins = "-"
+        cols = st.columns([0.85, 0.15])
+        with cols[0]:
+            st.info(f"👤 {name}｜有效期：{start} ➜ {end}｜登入方式：{via}｜Session 剩餘：約 {mins} 分鐘")
+        with cols[1]:
+            if st.button("登出", use_container_width=True):
+                for k in ["paid_unlocked","paid_user_meta","paid_unlocked_at","session_ttl_secs"]:
+                    st.session_state.pop(k, None)
+                st.success("已登出。")
+                st.experimental_rerun()
+    else:
+        # If expired, auto lock and prompt
+        if st.session_state.get("paid_unlocked") and session_is_expired():
+            for k in ["paid_unlocked","paid_user_meta","paid_unlocked_at","session_ttl_secs"]:
+                st.session_state.pop(k, None)
+            st.warning("您的進階權限 Session 已逾期（1 小時）。請重新解鎖或登入。")
+
+from datetime import datetime
+
+def _check_user_login(u, p):
+    try:
+        auth = st.secrets.get("authorized_users", {})
+    except Exception:
+        auth = {}
+    # auth is expected to be a dict of sections: { "admin": {...}, "user1": {...} }
+    for key, rec in (auth.items() if isinstance(auth, dict) else []):
+        try:
+            username = str(rec.get("username","")).strip()
+            password = str(rec.get("password","")).strip()
+            if u.strip() == username and p.strip() == password:
+                # Date window check (YYYY-MM-DD)
+                start = rec.get("start_date")
+                end = rec.get("end_date")
+                today = datetime.utcnow().date()
+                ok_date = True
+                def _parse(d):
+                    try:
+                        return datetime.strptime(d, "%Y-%m-%d").date()
+                    except Exception:
+                        return None
+                if start:
+                    s = _parse(str(start))
+                    if s and today < s: ok_date = False
+                if end:
+                    e = _parse(str(end))
+                    if e and today > e: ok_date = False
+                meta = {"role": key, "name": rec.get("name", key), "valid": ok_date}
+                return ok_date, meta
+        except Exception:
+            continue
+    return False, {}
+
 def paid_gate():
     st.subheader("專業版解鎖")
-    st.caption("輸入付費啟用碼以解鎖：**保險模擬／贈與模擬** 等進階功能。")
-    code = st.text_input("請輸入付費啟用碼（不分大小寫）", type="password")
-    # Read from secrets
-    paid_codes = []
-    try:
-        sc = st.secrets.get("PAID_CODES")
-        if isinstance(sc, list):
-            paid_codes = [str(x).strip().lower() for x in sc]
-        elif isinstance(sc, str):
-            paid_codes = [sc.strip().lower()]
-    except Exception:
-        pass
-    if not paid_codes:
-        paid_codes = ["demo-1234"]  # fallback demo
-    ok = False
-    if code:
-        ok = code.strip().lower() in paid_codes
-        if ok:
-            st.success("已解鎖進階功能。")
-            st.session_state["paid_unlocked"] = True
-        else:
-            st.error("啟用碼不正確，請確認。")
-    return st.session_state.get("paid_unlocked", False)
+    tabs = st.tabs(["輸入啟用碼", "帳號登入"])
+    unlocked = st.session_state.get("paid_unlocked", False)
+    meta_info = st.session_state.get("paid_user_meta")
+
+    with tabs[0]:
+        st.caption("方式一：輸入付費啟用碼以解鎖（支援多組碼）")
+        code = st.text_input("啟用碼（不分大小寫）", type="password", key="code_unlock")
+        # Read from secrets
+        paid_codes = []
+        try:
+            sc = st.secrets.get("PAID_CODES")
+            if isinstance(sc, list):
+                paid_codes = [str(x).strip().lower() for x in sc]
+            elif isinstance(sc, str):
+                paid_codes = [sc.strip().lower()]
+        except Exception:
+            pass
+        if not paid_codes:
+            paid_codes = ["demo-1234"]  # fallback demo
+        if code:
+            if code.strip().lower() in paid_codes:
+                st.success("已用啟用碼解鎖進階功能。")
+                st.session_state["paid_unlocked"] = True
+                st.session_state["paid_user_meta"] = {"via": "code"}
+                st.session_state["paid_unlocked_at"] = _session_now().isoformat()
+                st.session_state["session_ttl_secs"] = SESSION_TTL_SECS
+                unlocked = True
+
+    with tabs[1]:
+        st.caption("方式二：使用管理者提供的帳號密碼登入（依有效期限啟用）。")
+        u = st.text_input("帳號", key="login_user")
+        p = st.text_input("密碼", type="password", key="login_pass")
+        if st.button("登入", use_container_width=True):
+            ok, meta = _check_user_login(u, p)
+            if ok:
+                st.success(f"歡迎 {meta.get('name','')}！進階功能已解鎖。")
+                st.session_state["paid_unlocked"] = True
+                st.session_state["paid_user_meta"] = meta
+                st.session_state["paid_unlocked_at"] = _session_now().isoformat()
+                st.session_state["session_ttl_secs"] = SESSION_TTL_SECS
+                unlocked = True
+            else:
+                st.error("帳號或密碼錯誤，或不在有效期間內。")
+
+    if unlocked:
+        mi = st.session_state.get("paid_user_meta", {})
+        note = f"（解鎖來源：{mi.get('via','user')}）" if mi else ""
+        st.caption("目前狀態：✅ 已解鎖進階功能 " + note)
+    return unlocked
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -316,7 +434,8 @@ with tab2:
         estate_exempt = st.number_input("遺產稅免稅額", 0, 100_000_000, 13_330_000, 10_000)
         annual_excl = st.number_input("贈與年免稅額", 0, 10_000_000, 0, 10_000)
         if not paid:
-        st.info('🔒 進階功能（分年贈與模擬）需付費解鎖'); years_gift = 0
+        st.info("🔒 進階功能（分年贈與模擬）需付費解鎖")
+        years_gift = 0
     else:
         years_gift = st.number_input("分年贈與年數", 0, 60, 5, 1)
         if not paid:
@@ -328,7 +447,8 @@ with tab2:
         estate_brackets=[(50_000_000,0.10,0),(100_000_000,0.15,2_500_000),(float('inf'),0.20,7_500_000)]
         gift_brackets=[(25_000_000,0.10,0),(50_000_000,0.15,1_250_000),(float('inf'),0.20,3_750_000)]
         if not paid:
-            st.info('🔒 進階功能（保險模擬）需付費解鎖'); insurance_sum = 0
+            st.info("🔒 進階功能（保險模擬）需付費解鎖")
+            insurance_sum = 0
         else:
             insurance_sum = st.number_input("壽險理賠金", 0, 2_000_000_000, 0, 1_000_000)
         if not paid:
