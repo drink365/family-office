@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="《影響力》傳承策略平台｜永傳家族辦公室", page_icon="logo2.png", layout="wide")
+st.set_page_config(page_title="《影響力》傳承策略平台", page_icon="logo2.png", layout="wide")
 
 # ---- CJK Font Setup (strong) ----
 from pathlib import Path as _Path
